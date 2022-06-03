@@ -12,68 +12,51 @@ terraform {
   required_version = ">= 1.1.0"
 
   cloud {
-    organization = "REPLACE_ME"
+    organization = "terraformAzure"
 
     workspaces {
-      name = "gh-actions-demo"
+      name = "demo-github-actions"
     }
   }
 }
 
-provider "aws" {
-  region = "us-west-2"
+variable "azurerm_resource_group_name" {
+  azurerm_resource_group_name = "1-cb72c1bb-playground-sandbox"
 }
 
-resource "random_pet" "sg" {}
-
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
+# Configure the Azure provider
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 2.26"
+    }
   }
 
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"] # Canonical
+  required_version = ">= 0.14.9"
 }
 
-resource "aws_instance" "web" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.web-sg.id]
-
-  user_data = <<-EOF
-              #!/bin/bash
-              apt-get update
-              apt-get install -y apache2
-              sed -i -e 's/80/8080/' /etc/apache2/ports.conf
-              echo "Hello World" > /var/www/html/index.html
-              systemctl restart apache2
-              EOF
+provider "azurerm" {
+  features {}
+  skip_provider_registration = true
 }
 
-resource "aws_security_group" "web-sg" {
-  name = "${random_pet.sg.id}-sg"
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  // connectivity to ubuntu mirrors is required to run `apt-get update` and `apt-get install apache2`
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+# Create a virtual network
+resource "azurerm_virtual_network" "vnetC1" {
+  name                = "BatmanIncC"
+  address_space       = ["10.0.0.0/16"]
+  location            = "Central US"
+  resource_group_name = var.azurerm_resource_group_name
+  tags = {
+    Environment = "Terraform Getting Started"
+    Team        = "Batman"
   }
 }
 
-output "web-address" {
-  value = "${aws_instance.web.public_dns}:8080"
+resource "azurerm_subnet" "subnetC1" {
+  name                 = "subnetC1"
+  resource_group_name  = var.azurerm_resource_group_name
+  virtual_network_name = azurerm_virtual_network.vnetC1.name
+  address_prefixes     = ["10.0.1.0/24"]
 }
+
